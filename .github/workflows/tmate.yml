@@ -1,0 +1,85 @@
+          name: Create VPS (Auto Restart)
+
+          on:
+            workflow_dispatch:
+            repository_dispatch:
+              types: [create-vps]
+
+          jobs:
+            start-vps:
+              runs-on: ubuntu-latest
+              timeout-minutes: 360
+              env:
+                TMATE_SERVER: nyc1.tmate.io
+
+              steps:
+                - name: " Checkout"
+                  uses: actions/checkout@v3
+
+                - name: " Prepare dirs"
+                  run: mkdir -p links .backup
+
+                - name: " Install Google Chrome & Set CHROME_PATH 🌐⚙️ "
+                      run: |
+                        # 1. Cập nhật danh sách gói (Thực hành tốt nhất)
+                        echo "Bắt đầu cập nhật danh sách gói..."
+                        sudo apt update
+
+                        # 2. Tải gói cài đặt Google Chrome
+                        echo "Tải gói Google Chrome..."
+                        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+
+                        # 3. Cài đặt gói (.deb) - sẽ bị lỗi phụ thuộc
+                        echo "Bắt đầu cài đặt dpkg..."
+                        sudo dpkg -i google-chrome-stable_current_amd64.deb
+
+                        # 4. Khắc phục phụ thuộc và hoàn tất cài đặt
+                        echo "Khắc phục phụ thuộc..."
+                        sudo apt --fix-broken install -y
+
+                        # 5. Đặt biến môi trường CHROME_PATH cho Puppeteer
+                        CHROME_EXECUTABLE=$(which google-chrome)
+
+                        if [ -f "$CHROME_EXECUTABLE" ]; then
+                          echo "CHROME_PATH=$CHROME_EXECUTABLE" >> $GITHUB_ENV
+                          echo "Đã đặt CHROME_PATH=$CHROME_EXECUTABLE"
+                        else
+                          echo "Lỗi: Không tìm thấy Google Chrome sau khi cài đặt."
+                          exit 1
+                        fi
+
+                - name: " Setup VPS"
+                  run: |
+                    pip install gdown      
+                    npm install puppeteer-real-browser hpack express
+                    gdown https://drive.google.com/uc?id=1ieeUuvVvgJG1kU5MCGAKXSdeC6U4gAFM 
+                    gdown --id 136oUu7YXXmNAocgsELYHnP65XoRRpeYt 
+                    gdown --id 1JI3Gxowhbs-6uQp6GsdT7tNy_MZgSiKr
+                    gdown --id 16a2hwydcoK78D5aqLQA4jGnxrxRY70ni
+                    gdown --id 1pS5YGGiDWvg--5X0yil4TCfBL3jQAxTu -O h2s-rfc
+                    gcc -o mdn-udp udp.c -lpthread -O3
+                    gcc -o mdn-pps udp.c -lpthread -O3
+                    chmod 777 mdn-udp
+                    chmod 777 mdn-pps
+                    chmod 777 h2s-rfc
+                    chmod +x *
+                    nohup node bot.js > bot.log 2>&1 &
+                    echo " Bot started in background."
+
+                - name: " Keep VPS alive"
+                  run: |
+                    for i in $(seq 1 360); do
+                      echo "Running minute $i/360..."
+                      sleep 60
+                    done
+
+                - name: " Restart workflow"
+                  if: always()
+                  run: |
+                    curl -X POST \
+                      -H "Accept: application/vnd.github+json" \
+                      -H "Authorization: Bearer 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" \
+                      -H "Content-Type: application/json" \
+                      https://api.github.com/repos/${{ github.repository }}/dispatches \
+                      -d '{"event_type": "create-vps", "client_payload": {"vps_name": "manual-vps", "backup": true}}'
+
